@@ -1,4 +1,4 @@
-FROM buildpack-deps:jessie
+FROM ubuntu:15.10
 
 # skip installing gem documentation
 RUN mkdir -p /usr/local/etc \
@@ -19,9 +19,13 @@ RUN set -ex \
 		bison \
 		libgdbm-dev \
 		ruby \
+		build-essential \
+		autoconf \
+		zlib1g-dev \
+		libssl-dev \
 	' \
 	&& apt-get update \
-	&& apt-get install -y --no-install-recommends $buildDeps \
+	&& apt-get install -y --no-install-recommends curl $buildDeps \
 	&& rm -rf /var/lib/apt/lists/* \
 	&& curl -fSL -o ruby.tar.gz "http://cache.ruby-lang.org/pub/ruby/$RUBY_MAJOR/ruby-$RUBY_VERSION.tar.gz" \
 	&& echo "$RUBY_DOWNLOAD_SHA256 *ruby.tar.gz" | sha256sum -c - \
