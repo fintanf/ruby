@@ -23,6 +23,7 @@ RUN set -ex \
 		autoconf \
 		zlib1g-dev \
 		libssl-dev \
+		libreadline-dev \
 	' \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends curl $buildDeps \
