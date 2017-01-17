@@ -8,13 +8,14 @@ RUN mkdir -p /usr/local/etc \
 	} >> /usr/local/etc/gemrc
 
 ENV RUBY_MAJOR 2.2
-ENV RUBY_VERSION 2.2.5
-ENV RUBY_DOWNLOAD_SHA256 30c4b31697a4ca4ea0c8db8ad30cf45e6690a0f09687e5d483c933c03ca335e3
-ENV RUBYGEMS_VERSION 2.6.4
+ENV RUBY_VERSION 2.2.6
+ENV RUBY_DOWNLOAD_SHA256 9414ecc0d09cf71c9a24e8dc82fcc87919ac7359fb08db2791d6c32bfd157339
+ENV RUBYGEMS_VERSION 2.6.8
 
 # some of ruby's build scripts are written in ruby
-# we purge this later to make sure our final image uses what we just built
+#   we purge system ruby later to make sure our final image uses what we just built
 RUN set -ex \
+	\
 	&& buildDeps=' \
 		bison \
 		libgdbm-dev \
@@ -23,22 +24,37 @@ RUN set -ex \
 	&& apt-get update \
 	&& apt-get install -y --no-install-recommends $buildDeps \
 	&& rm -rf /var/lib/apt/lists/* \
-	&& curl -fSL -o ruby.tar.gz "http://cache.ruby-lang.org/pub/ruby/$RUBY_MAJOR/ruby-$RUBY_VERSION.tar.gz" \
-	&& echo "$RUBY_DOWNLOAD_SHA256 *ruby.tar.gz" | sha256sum -c - \
+	\
+	&& wget -O ruby.tar.xz "https://cache.ruby-lang.org/pub/ruby/${RUBY_MAJOR%-rc}/ruby-$RUBY_VERSION.tar.xz" \
+	&& echo "$RUBY_DOWNLOAD_SHA256 *ruby.tar.xz" | sha256sum -c - \
+	\
 	&& mkdir -p /usr/src/ruby \
-	&& tar -xzf ruby.tar.gz -C /usr/src/ruby --strip-components=1 \
-	&& rm ruby.tar.gz \
+	&& tar -xJf ruby.tar.xz -C /usr/src/ruby --strip-components=1 \
+	&& rm ruby.tar.xz \
+	\
 	&& cd /usr/src/ruby \
-	&& { echo '#define ENABLE_PATH_CHECK 0'; echo; cat file.c; } > file.c.new && mv file.c.new file.c \
+	\
+# hack in "ENABLE_PATH_CHECK" disabling to suppress:
+#   warning: Insecure world writable dir
+	&& { \
+		echo '#define ENABLE_PATH_CHECK 0'; \
+		echo; \
+		cat file.c; \
+	} > file.c.new \
+	&& mv file.c.new file.c \
+	\
 	&& autoconf \
-	&& ./configure --disable-install-doc \
+	&& ./configure --disable-install-doc --enable-shared \
 	&& make -j"$(nproc)" \
 	&& make install \
+	\
 	&& apt-get purge -y --auto-remove $buildDeps \
-	&& gem update --system $RUBYGEMS_VERSION \
-	&& rm -r /usr/src/ruby
+	&& cd / \
+	&& rm -r /usr/src/ruby \
+	\
+	&& gem update --system "$RUBYGEMS_VERSION"
 
-ENV BUNDLER_VERSION 1.12.5
+ENV BUNDLER_VERSION 1.13.7
 
 RUN gem install bundler --version "$BUNDLER_VERSION"
 

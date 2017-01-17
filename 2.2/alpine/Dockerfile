@@ -8,13 +8,15 @@ RUN mkdir -p /usr/local/etc \
 	} >> /usr/local/etc/gemrc
 
 ENV RUBY_MAJOR 2.2
-ENV RUBY_VERSION 2.2.5
-ENV RUBY_DOWNLOAD_SHA256 30c4b31697a4ca4ea0c8db8ad30cf45e6690a0f09687e5d483c933c03ca335e3
-ENV RUBYGEMS_VERSION 2.6.4
+ENV RUBY_VERSION 2.2.6
+ENV RUBY_DOWNLOAD_SHA256 9414ecc0d09cf71c9a24e8dc82fcc87919ac7359fb08db2791d6c32bfd157339
+ENV RUBYGEMS_VERSION 2.6.8
 
 # some of ruby's build scripts are written in ruby
-# we purge this later to make sure our final image uses what we just built
+#   we purge system ruby later to make sure our final image uses what we just built
+# readline-dev vs libedit-dev: https://bugs.ruby-lang.org/issues/11869 and https://github.com/docker-library/ruby/issues/75
 RUN set -ex \
+	\
 	&& apk add --no-cache --virtual .ruby-builddeps \
 		autoconf \
 		bison \
@@ -22,7 +24,6 @@ RUN set -ex \
 		bzip2-dev \
 		ca-certificates \
 		coreutils \
-		curl \
 		gcc \
 		gdbm-dev \
 		glib-dev \
@@ -33,27 +34,41 @@ RUN set -ex \
 		linux-headers \
 		make \
 		ncurses-dev \
+		openssl \
 		openssl-dev \
 		procps \
-# https://bugs.ruby-lang.org/issues/11869 and https://github.com/docker-library/ruby/issues/75
 		readline-dev \
 		ruby \
+		tar \
 		yaml-dev \
 		zlib-dev \
-	&& curl -fSL -o ruby.tar.gz "http://cache.ruby-lang.org/pub/ruby/$RUBY_MAJOR/ruby-$RUBY_VERSION.tar.gz" \
-	&& echo "$RUBY_DOWNLOAD_SHA256 *ruby.tar.gz" | sha256sum -c - \
-	&& mkdir -p /usr/src \
-	&& tar -xzf ruby.tar.gz -C /usr/src \
-	&& mv "/usr/src/ruby-$RUBY_VERSION" /usr/src/ruby \
-	&& rm ruby.tar.gz \
+		xz \
+	\
+	&& wget -O ruby.tar.xz "https://cache.ruby-lang.org/pub/ruby/${RUBY_MAJOR%-rc}/ruby-$RUBY_VERSION.tar.xz" \
+	&& echo "$RUBY_DOWNLOAD_SHA256 *ruby.tar.xz" | sha256sum -c - \
+	\
+	&& mkdir -p /usr/src/ruby \
+	&& tar -xJf ruby.tar.xz -C /usr/src/ruby --strip-components=1 \
+	&& rm ruby.tar.xz \
+	\
 	&& cd /usr/src/ruby \
-	&& { echo '#define ENABLE_PATH_CHECK 0'; echo; cat file.c; } > file.c.new && mv file.c.new file.c \
+	\
+# hack in "ENABLE_PATH_CHECK" disabling to suppress:
+#   warning: Insecure world writable dir
+	&& { \
+		echo '#define ENABLE_PATH_CHECK 0'; \
+		echo; \
+		cat file.c; \
+	} > file.c.new \
+	&& mv file.c.new file.c \
+	\
 	&& autoconf \
-	# the configure script does not detect isnan/isinf as macros
+# the configure script does not detect isnan/isinf as macros
 	&& ac_cv_func_isnan=yes ac_cv_func_isinf=yes \
-		./configure --disable-install-doc \
+		./configure --disable-install-doc --enable-shared \
 	&& make -j"$(getconf _NPROCESSORS_ONLN)" \
 	&& make install \
+	\
 	&& runDeps="$( \
 		scanelf --needed --nobanner --recursive /usr/local \
 			| awk '{ gsub(/,/, "\nso:", $2); print "so:" $2 }' \
@@ -64,17 +79,18 @@ RUN set -ex \
 	&& apk add --virtual .ruby-rundeps $runDeps \
 		bzip2 \
 		ca-certificates \
-		curl \
 		libffi-dev \
 		openssl-dev \
 		yaml-dev \
 		procps \
 		zlib-dev \
 	&& apk del .ruby-builddeps \
-	&& gem update --system $RUBYGEMS_VERSION \
-	&& rm -r /usr/src/ruby
+	&& cd / \
+	&& rm -r /usr/src/ruby \
+	\
+	&& gem update --system "$RUBYGEMS_VERSION"
 
-ENV BUNDLER_VERSION 1.12.5
+ENV BUNDLER_VERSION 1.13.7
 
 RUN gem install bundler --version "$BUNDLER_VERSION"
 
