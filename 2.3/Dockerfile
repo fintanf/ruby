@@ -27,7 +27,7 @@ RUN set -ex \
 		libreadline-dev \
 	' \
 	&& apt-get update \
-	&& apt-get install -y --no-install-recommends curl $buildDeps \
+	&& apt-get install -y --no-install-recommends curl wget $buildDeps \
 	&& rm -rf /var/lib/apt/lists/* \
 	\
 	&& wget -O ruby.tar.xz "https://cache.ruby-lang.org/pub/ruby/${RUBY_MAJOR%-rc}/ruby-$RUBY_VERSION.tar.xz" \
